@@ -1,0 +1,8 @@
+/plugin
+/dist/
+CLAUDE.local.md
+.env
+*.local
+
+# Local agent/tooling state
+/.claude/

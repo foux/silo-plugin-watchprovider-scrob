@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Check that the tag matches the manifest version
+        run: |
+          manifest_version=$(jq -r .version manifest.json)
+          if [ "v${manifest_version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match manifest.json version ${manifest_version}."
+            exit 1
+          fi
+
+      - name: Run tests
+        run: go test -race ./...
+
+      # The plugin is pure Go, so every platform cross-compiles from one
+      # runner. The SDK embeds the binary's checksum in the manifest it serves
+      # at runtime, so the binaries are the only install artifacts.
+      - name: Build binaries
+        run: make build-all VERSION="${GITHUB_REF_NAME#v}"
+
+      - name: Write checksums
+        working-directory: dist
+        run: sha256sum plugin-* > checksums.txt
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --verify-tag \
+            dist/plugin-linux-amd64 \
+            dist/plugin-linux-arm64 \
+            dist/plugin-darwin-arm64 \
+            dist/checksums.txt
