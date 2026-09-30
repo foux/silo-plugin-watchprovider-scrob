@@ -20,11 +20,17 @@ const (
 	// host-owned credentials: see exportWatch.
 	exportSinceAttribute = "scrob.export_since"
 	// ApplyEvents stops starting new events after this long, or sooner when
-	// the call's deadline, less syncDeadlineMargin, comes first. Every Scrob
-	// history write fans out to the services the user connected to Scrob
-	// (Trakt, Simkl, media servers), so one write can take several seconds.
-	syncBudget         = 90 * time.Second
-	syncDeadlineMargin = 5 * time.Second
+	// the call's deadline, less a margin, comes first. Every Scrob history
+	// write fans out to the services the user connected to Scrob (Trakt,
+	// Simkl, media servers), so one write can take several seconds.
+	syncBudget = 90 * time.Second
+	// The margin keeps the finished results ahead of the host's deadline. It
+	// shrinks with a short deadline: a stop from Silo's Jellyfin-compatible
+	// API arrives with only five seconds, and a fixed five-second margin
+	// would leave no time at all and turn every such stop into a retry that
+	// fails the same way.
+	syncDeadlineMargin         = 5 * time.Second
+	syncDeadlineMarginFraction = 5
 )
 
 type Server struct {
@@ -107,7 +113,9 @@ func (s *Server) ApplyEvents(ctx context.Context, req *pluginv1.WatchSyncApplyEv
 		response.UpdatedCredentials = updated
 	}
 	for index, event := range events {
-		if s.clock().Sub(startedAt) >= budget {
+		// The first event always runs: with a tight deadline the budget can
+		// be zero, and returning nothing but retries would never make progress.
+		if index > 0 && s.clock().Sub(startedAt) >= budget {
 			for _, deferred := range events[index:] {
 				response.Results = append(response.Results, resultFromFault(deferred.GetEventId(),
 					temporaryFault("Scrob sync time limit reached; the event will be retried", 0)))
@@ -286,20 +294,33 @@ func requestedStateKind(kinds []pluginv1.WatchSyncRemoteStateKind) (pluginv1.Wat
 // cut short so the results still reach the host before the call's deadline.
 func syncTimeBox(ctx context.Context) time.Duration {
 	budget := syncBudget
-	if deadline, ok := ctx.Deadline(); ok {
-		budget = min(budget, time.Until(deadline)-syncDeadlineMargin)
+	if remaining, ok := timeBeforeDeadline(ctx); ok {
+		budget = min(budget, remaining)
 	}
 	return budget
 }
 
 // syncRequestLimit bounds every request of one call: the client's request
-// timeout, cut to end syncDeadlineMargin before the call's deadline.
+// timeout, cut to end a margin before the call's deadline.
 func syncRequestLimit(ctx context.Context) time.Duration {
 	limit := defaultRequestTimeout
-	if deadline, ok := ctx.Deadline(); ok {
-		limit = min(limit, max(time.Until(deadline)-syncDeadlineMargin, 0))
+	if remaining, ok := timeBeforeDeadline(ctx); ok {
+		limit = min(limit, remaining)
 	}
 	return limit
+}
+
+// timeBeforeDeadline is the time left before the call's deadline, less the
+// margin: syncDeadlineMargin, or a fraction of the remaining time when the
+// deadline is closer than that.
+func timeBeforeDeadline(ctx context.Context) (time.Duration, bool) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return 0, false
+	}
+	remaining := max(time.Until(deadline), 0)
+	margin := min(syncDeadlineMargin, remaining/syncDeadlineMarginFraction)
+	return remaining - margin, true
 }
 
 func (s *Server) clock() time.Time {

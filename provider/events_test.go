@@ -247,9 +247,10 @@ func TestCompletedStopKeepsScrobDuplicateAsNoChange(t *testing.T) {
 	}
 }
 
-func TestCompletedStopWithoutHistoryIDLeavesTheWatchToReconciliation(t *testing.T) {
+func TestCompletedStopWithoutHistoryIDStillRecordsTheWatch(t *testing.T) {
 	t.Parallel()
 	fake := newFakeScrob(t)
+	fake.handle("POST /history", ok(map[string]any{"status": "ok"}))
 	fake.handle("GET /history/now-playing", nowPlaying("kodi:7:silo-abc123"))
 	fake.handle("DELETE /history/session/kodi:7:silo-abc123", ok(map[string]any{"status": "ok"}))
 	stop := playback(opStop, movieMedia(), 5990, 6000)
@@ -257,7 +258,7 @@ func TestCompletedStopWithoutHistoryIDLeavesTheWatchToReconciliation(t *testing.
 
 	result := onlyResult(t, apply(t, fake, stop))
 
-	if result.GetStatus() != statusApplied || len(fake.calls("POST /history")) != 0 {
+	if result.GetStatus() != statusApplied || len(fake.calls("POST /history")) != 1 {
 		t.Fatalf("result = %v, requests = %v", result, fake.routesCalled())
 	}
 }

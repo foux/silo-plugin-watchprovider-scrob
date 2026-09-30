@@ -81,23 +81,21 @@ func scrobbleStop(ctx context.Context, client *apiClient, event *pluginv1.WatchS
 		}
 		return sendPlayerEvent(ctx, client, "playback_stopped", event)
 	}
-	status := statusApplied
-	// Without a history ID the host has not queued this play for export, and
-	// its reconciliation sends it later as MARK_WATCHED with the exact time
-	// of its history row. Recording it here would use the stop's time instead.
-	if event.GetWatchHistoryId() != "" {
-		var fault *pluginv1.WatchSyncFault
-		status, fault = recordWatch(ctx, client, event.GetMedia(), event.GetOccurredAt())
-		if fault != nil && (connectionWide(fault) || isRetryable(fault)) {
-			return 0, fault
+	// The watch is recorded here whether or not the host has a history row
+	// for it (watch_history_id). Silo's Jellyfin-compatible API records a
+	// finished playback as completed progress without a history row unless
+	// the client also marks the item played, so leaving the watch to the
+	// host's history reconciliation would lose it.
+	status, fault := recordWatch(ctx, client, event.GetMedia(), event.GetOccurredAt())
+	if fault != nil && (connectionWide(fault) || isRetryable(fault)) {
+		return 0, fault
+	}
+	if fault != nil {
+		// The watch cannot be recorded, but the session must still end.
+		if _, closeFault := dismissSession(ctx, client, event); closeFault != nil && connectionWide(closeFault) {
+			return 0, closeFault
 		}
-		if fault != nil {
-			// The watch cannot be recorded, but the session must still end.
-			if _, closeFault := dismissSession(ctx, client, event); closeFault != nil && connectionWide(closeFault) {
-				return 0, closeFault
-			}
-			return 0, fault
-		}
+		return 0, fault
 	}
 	if _, fault := dismissSession(ctx, client, event); fault != nil {
 		return 0, fault

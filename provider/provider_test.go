@@ -1,9 +1,11 @@
 package provider
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	pluginv1 "github.com/Silo-Server/silo-plugin-sdk/pkg/pluginproto/silo/plugin/v1"
 )
@@ -152,5 +154,47 @@ func TestApplyEventsRetriesAServerError(t *testing.T) {
 
 	if result.GetStatus() != pluginv1.WatchSyncApplyStatus_WATCH_SYNC_APPLY_STATUS_RETRY {
 		t.Fatalf("result = %v", result)
+	}
+}
+
+func TestAShortDeadlineStillAppliesTheFirstEvent(t *testing.T) {
+	t.Parallel()
+	fake := newFakeScrob(t)
+	fake.handle("POST /webhooks/kodi", ok(map[string]any{"status": "ok"}))
+	// Silo's Jellyfin-compatible API dispatches a stop with a five-second
+	// deadline, shorter than the plugin's usual safety margin.
+	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
+	defer cancel()
+
+	response, err := NewServer(fake.server.Client()).ApplyEvents(ctx, &pluginv1.WatchSyncApplyEventsRequest{
+		Context: fake.authContext(),
+		Events: []*pluginv1.WatchSyncEvent{
+			playback(pluginv1.WatchSyncOperation_WATCH_SYNC_OPERATION_SCROBBLE_START, movieMedia(), 0, 6000),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result := onlyResult(t, response); result.GetStatus() != statusApplied {
+		t.Fatalf("result = %v", result)
+	}
+}
+
+func TestTimeBeforeDeadlineKeepsAMarginProportionalToAShortDeadline(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ deadline, wantMin, wantMax time.Duration }{
+		{5 * time.Second, 3900 * time.Millisecond, 4 * time.Second},
+		{60 * time.Second, 54 * time.Second, 55 * time.Second},
+	} {
+		ctx, cancel := context.WithTimeout(t.Context(), tc.deadline)
+		remaining, ok := timeBeforeDeadline(ctx)
+		cancel()
+		if !ok || remaining < tc.wantMin || remaining > tc.wantMax {
+			t.Errorf("deadline %v: remaining = %v, want within [%v, %v]", tc.deadline, remaining, tc.wantMin, tc.wantMax)
+		}
+	}
+	if _, ok := timeBeforeDeadline(t.Context()); ok {
+		t.Error("a context without a deadline must report none")
 	}
 }
