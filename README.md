@@ -21,7 +21,7 @@ The plugin uses only Scrob's existing HTTP API and needs no change to Scrob. It 
 
 The Scrob URL is the address of the Scrob web app as the Silo server reaches it, for example `http://scrob:7330` when both run on the same Docker network. The plugin sends its API calls through the web app's `/api/proxy` path, so a URL that already ends in `/api/proxy` also works.
 
-The plugin needs Scrob 2.17.0 or later.
+The plugin needs Scrob 2.17.0 or later. From Scrob 2.32.0, the watches it records show as coming from Silo in Scrob's history, and from Scrob 2.33.0 its live playback shows as Silo in Now Playing. Older Scrob releases show them as manual entries and as Kodi.
 
 Scrob pushes every watch it records to the services connected to it. If Scrob already syncs with Trakt or Simkl, do not also connect those services to Silo directly. Silo would send them the watches it imports from Scrob a second time.
 

@@ -44,7 +44,7 @@ func TestMarkWatchedRecordsAMovieAtSiloTimeInWholeUTCSeconds(t *testing.T) {
 		t.Fatalf("result = %v", result)
 	}
 	body := fake.calls("POST /history")[0].body
-	want := map[string]any{"media_type": "movie", "tmdb_id": 603.0, "watched_at": "2026-09-01T20:15:05Z", "completed": true}
+	want := map[string]any{"media_type": "movie", "tmdb_id": 603.0, "watched_at": "2026-09-01T20:15:05Z", "completed": true, "source": "silo"}
 	if !reflect.DeepEqual(body, want) {
 		t.Fatalf("body = %v, want %v", body, want)
 	}
@@ -103,7 +103,7 @@ func TestMarkWatchedFindsAnEpisodeByItsOwnIDsFirst(t *testing.T) {
 	}
 	want := map[string]any{
 		"media_type": "episode", "tmdb_id": 63057.0, "tvdb_id": 3436461.0,
-		"watched_at": "2026-09-01T20:15:05Z", "completed": true,
+		"watched_at": "2026-09-01T20:15:05Z", "completed": true, "source": "silo",
 	}
 	if !reflect.DeepEqual(calls[0].body, want) {
 		t.Fatalf("body = %v, want %v", calls[0].body, want)
@@ -132,7 +132,7 @@ func TestMarkWatchedFallsBackToSeriesAndNumbersForAnEpisodeScrobDoesNotKnow(t *t
 	want := map[string]any{
 		"media_type": "episode", "series_tmdb_id": 1399.0, "series_tvdb_id": 121361.0,
 		"season_number": 1.0, "episode_number": 2.0,
-		"watched_at": "2026-09-01T20:15:05Z", "completed": true,
+		"watched_at": "2026-09-01T20:15:05Z", "completed": true, "source": "silo",
 	}
 	if len(calls) != 2 || !reflect.DeepEqual(calls[1].body, want) {
 		t.Fatalf("calls = %v, want the second to be %v", calls, want)
@@ -162,7 +162,7 @@ func TestStartSendsSeriesIDsWithTheEpisodeTMDBID(t *testing.T) {
 		t.Fatalf("result = %v", result)
 	}
 	body := fake.calls("POST /webhooks/kodi")[0].body
-	if body["event"] != "playback_started" || body["session_id"] != "silo-abc123" || body["total_seconds"] != 3000.0 {
+	if body["event"] != "playback_started" || body["session_id"] != "silo-abc123" || body["total_seconds"] != 3000.0 || body["source"] != "silo" {
 		t.Fatalf("body = %v", body)
 	}
 	item := body["item"].(map[string]any)

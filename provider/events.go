@@ -25,6 +25,12 @@ const (
 	playerWebhookPath = "/webhooks/kodi"
 	// Scrob records a watch when a stop reaches this fraction of the runtime.
 	scrobWatchedFraction = 0.90
+	// watchSource labels what this plugin sends to Scrob as coming from Silo:
+	// the watches it writes to Scrob's history, shown there instead of
+	// "manual" (Scrob 2.32.0, ellite/scrob#492), and its live playback
+	// sessions, shown in Now Playing instead of "Kodi" (Scrob 2.33.0,
+	// ellite/scrob#504). Older Scrob releases ignore the field.
+	watchSource = "silo"
 )
 
 type playerPayload struct {
@@ -33,6 +39,7 @@ type playerPayload struct {
 	PositionSeconds int64      `json:"position_seconds"`
 	TotalSeconds    int64      `json:"total_seconds"`
 	Item            playerItem `json:"item"`
+	Source          string     `json:"source"`
 }
 
 type playerItem struct {
@@ -114,6 +121,7 @@ func sendPlayerEvent(ctx context.Context, client *apiClient, name string, event 
 		PositionSeconds: int64(math.Round(max(event.GetPositionSeconds(), 0))),
 		TotalSeconds:    int64(math.Round(max(event.GetDurationSeconds(), 0))),
 		Item:            item,
+		Source:          watchSource,
 	}
 	var response playerResponse
 	if failure := client.do(ctx, http.MethodPost, playerWebhookPath, nil, payload, &response); failure != nil {
@@ -217,6 +225,7 @@ type watchRequest struct {
 	EpisodeNumber *int32 `json:"episode_number,omitempty"`
 	WatchedAt     string `json:"watched_at"`
 	Completed     bool   `json:"completed"`
+	Source        string `json:"source"`
 }
 
 // recordWatch adds one completed watch to Scrob's history.
@@ -263,6 +272,7 @@ func recordWatch(ctx context.Context, client *apiClient, media *pluginv1.WatchSy
 	for _, attempt := range attempts {
 		attempt.WatchedAt = watchedAt
 		attempt.Completed = true
+		attempt.Source = watchSource
 		failure := client.do(ctx, http.MethodPost, "/history", nil, attempt, nil)
 		switch {
 		case failure == nil:
