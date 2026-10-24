@@ -46,7 +46,7 @@ If Silo also imports history directly from a media server that sends its plays t
 
 ### Live playback
 
-Start, pause and resume go to Scrob's player webhook (`/webhooks/kodi`, which Scrob's Kodi add-on also uses). Scrob resolves the title and forwards the event to Trakt and the other services connected to it.
+Start, pause and resume go to Scrob's player webhook (`/webhooks/kodi`, which Scrob's Kodi add-on also uses) with the source `silo`. Scrob resolves the title, shows the session in its Now Playing bar under Silo and forwards the event to Trakt and the other services connected to it. Scrob versions that predate the source field label the session as Kodi instead.
 
 When playback finishes, the plugin records the watch at Silo's time and then dismisses the Now Playing session. It does not send a stop to the player webhook, for two reasons:
 

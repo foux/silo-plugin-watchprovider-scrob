@@ -23,12 +23,18 @@ const (
 	// Playing bar, and forwards live scrobbles to the services the user
 	// connected to Scrob.
 	playerWebhookPath = "/webhooks/kodi"
+	// Source under which Scrob records and displays the plugin's sessions
+	// and watches. Scrob accepts 1 to 16 lowercase letters, digits, "_" or
+	// "-", falls back to "kodi" on versions that predate the field, and
+	// keys the session as "kodi:<user id>:<session id>" either way.
+	playerSource = "silo"
 	// Scrob records a watch when a stop reaches this fraction of the runtime.
 	scrobWatchedFraction = 0.90
 )
 
 type playerPayload struct {
 	Event           string     `json:"event"`
+	Source          string     `json:"source"`
 	SessionID       string     `json:"session_id"`
 	PositionSeconds int64      `json:"position_seconds"`
 	TotalSeconds    int64      `json:"total_seconds"`
@@ -110,6 +116,7 @@ func sendPlayerEvent(ctx context.Context, client *apiClient, name string, event 
 	}
 	payload := playerPayload{
 		Event:           name,
+		Source:          playerSource,
 		SessionID:       sessionID(event),
 		PositionSeconds: int64(math.Round(max(event.GetPositionSeconds(), 0))),
 		TotalSeconds:    int64(math.Round(max(event.GetDurationSeconds(), 0))),

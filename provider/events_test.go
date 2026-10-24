@@ -28,7 +28,7 @@ func playback(operation pluginv1.WatchSyncOperation, media *pluginv1.WatchSyncMe
 func nowPlaying(keys ...string) http.HandlerFunc {
 	sessions := make([]map[string]any, 0, len(keys))
 	for _, key := range keys {
-		sessions = append(sessions, map[string]any{"session_key": key, "source": "kodi"})
+		sessions = append(sessions, map[string]any{"session_key": key, "source": "silo"})
 	}
 	return ok(map[string]any{"now_playing": sessions})
 }
@@ -162,7 +162,7 @@ func TestStartSendsSeriesIDsWithTheEpisodeTMDBID(t *testing.T) {
 		t.Fatalf("result = %v", result)
 	}
 	body := fake.calls("POST /webhooks/kodi")[0].body
-	if body["event"] != "playback_started" || body["session_id"] != "silo-abc123" || body["total_seconds"] != 3000.0 {
+	if body["event"] != "playback_started" || body["source"] != "silo" || body["session_id"] != "silo-abc123" || body["total_seconds"] != 3000.0 {
 		t.Fatalf("body = %v", body)
 	}
 	item := body["item"].(map[string]any)
